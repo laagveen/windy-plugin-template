@@ -11,6 +11,7 @@ const config: ExternalPluginConfig = {
     desktopUI: 'embedded',
     mobileUI: 'small',
     addToContextmenu: true,
+    private: true,
 };
 
 export default config;
