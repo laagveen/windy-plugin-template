@@ -1,16 +1,17 @@
-import type { ExternalPluginConfig } from '@windy/interfaces';
+import type { ExternalPluginConfig } from '@windy/interfaces.d';
 
 const config: ExternalPluginConfig = {
-    name: 'windy-plugin-my-plugin',
-    version: '0.1.0',
-    icon: '🔌',
-    title: 'This is my first plugin',
-    description: 'This is my first plugin.',
-    author: 'John Doe (optional company name)',
-    repository: 'https://github.com/windycom/windy-plugin-template',
-    desktopUI: 'rhpane',
-    mobileUI: 'fullscreen',
-    routerPath: '/my-plugin',
+    name: 'windy-plugin-wave-propegation-time',
+    version: '1.0.1',
+    title: 'Wave propagation time',
+    icon: '🚁',
+    description: 'This plugin demonstrates capabilities of Windy Plugin System.',
+    author: 'Laagveen',
+    repository: 'https://github.com/laagveen/windy-plugin-template',
+    desktopUI: 'embedded',
+    mobileUI: 'small',
+    addToContextmenu: true,
 };
 
 export default config;
+
