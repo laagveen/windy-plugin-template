@@ -3,7 +3,7 @@
 <div class="size-s mb-5">Wave period: {selectedPeriod} seconds</div>
 {#if !error}
     <small class="size-xxs mt-5">
-        Wave propegation provided by <a href="https://www.openaip.net/" class="clickable dotted" target="_top">Me</a>
+        Wave propegation plugin provided by <a href="https://github.com/laagveen/windy-plugin-template" class="clickable dotted" target="_top">Laagveen</a>
     </small>
 {:else}
     <small class="rounded-box bg-error size-s mt-10">
@@ -13,23 +13,11 @@
 
 <script lang="ts">
     import store from '@windy/store';
-    // import store from '@windy/store';
-    // import { map } from '@windy/map';
-    import { map, markers } from '@windy/map';
-    //import { countries } from "./countries";
-    import { singleclick } from '@windy/singleclick';
-    //import { setUrl } from "@windy/location";
-    
+    import { map } from '@windy/map';
     import { onDestroy, onMount } from 'svelte';
     import type { LatLon } from '@windy/interfaces'
-    // get store
-
+    import broadcast from '@windy/broadcast';
     
-    import config from './pluginConfig';
-    const { name } = config;
-
-    let selectedLat: number = -1;
-    let selectedLon: number = -1;
     let selectedPeriod: number = 7;
     
     let markers: L.Marker[] = [];
@@ -39,24 +27,42 @@
 
     let error: string | null = null;
 
-    // setlocation is called when user clicks on the map
-    const setLocation = (latLon: LatLon) => {
-        const { lat, lon } = latLon;
-        selectedLat = lat;
-        selectedLon = lon;
+    // struct for mode visibility none, picker or detail
+    let mode: string = 'none';
 
-        removeCircles();
+    const onPluginClose = (pluginName: string) => {
+        if(pluginName === 'picker') {
+            pickerActive = false;
+        }
+        if(pluginName === 'detail') {
+            detailActive = false;
+        }
 
+        updateUI(selectedPeriod);
     }
 
-    const onMapClick = (e: L.LeafletMouseEvent) => {
-        setLocation({ lat: e.latlng.lat, lon: e.latlng.lng });
+    // pluginclose listener
+    broadcast.on('pluginClosed', onPluginClose);
+
+    const onPluginOpen = (pluginName: string) => {
+        if(pluginName === 'picker') {
+            pickerActive = true;
+        }
+        if(pluginName === 'detail') {
+            detailActive = true;
+        }
+
+        updateUI(selectedPeriod);
     }
+
+    // pluginclose listener
+    broadcast.on('pluginOpened', onPluginOpen);
+
+    let pickerActive : boolean = false;
+    let detailActive : boolean = false;
 
     onMount(() => {
-        //singleclick.on(name, setLocation);
-        map.on('click', onMapClick);
-
+        console.log('onMount');
         // add marker at Lengtegraad 3.80994° Breedtegraat 	55.39882° for a12 buor
         buoys.push(L.marker([55.39882, 3.80994], { icon: L.divIcon({ html: `<div>A12</div>`, iconSize: [16, 16], iconAnchor: [8, 24]})}).addTo(map));
         // add marker for j4
@@ -64,12 +70,27 @@
         // add marker for k13
         buoys.push(L.marker([53.22, 3.22], { icon: L.divIcon({ html: `<div>K13</div>`, iconSize: [16, 16], iconAnchor: [8, 24]})}).addTo(map));
 
+        if(store.get('pickerLocation')) {
+            pickerLocation = store.get('pickerLocation');
+            pickerActive = true;
+        }
+        else if(document.getElementById('plugin-detail')) {
+            if(store.get('detailLocation')) {
+                detailLocation = store.get('detailLocation');
+                detailActive = true;
+            }
+        }
+        
+        updateUI(selectedPeriod);
     });
 
     onDestroy(() => {
-        //singleclick.off(name, setLocation);
-        map.off('click', onMapClick);
+        console.log('onDestroy');
         removeCircles();
+        broadcast.off('pluginClosed', onPluginClose);
+        broadcast.off('pluginOpened', onPluginOpen);
+        store.off('pickerLocation', onPickerLocation);
+        store.off('detailLocation', onDetailLocation);
 
         buoys.forEach(buoy => buoy.remove());
         buoys = [];
@@ -91,27 +112,6 @@
         return waveDistance(period, time * 3600);
     }
 
-    const setPickerLocation = (latLon: LatLon) => {
-        if(!latLon) {
-            return;
-        }
-        pickerLocation = latLon;
-    }
-
-    let pickerLocation : LatLon = { lat: -1, lon: -1 };
-    setPickerLocation(store.get('pickerLocation'));
-    setPickerLocation(store.get('detailLocation'));
-
-    store.on('pickerLocation', (latLon: LatLon) => {
-        setPickerLocation(latLon);
-    });
-
-    store.on('detailLocation', (latLon: LatLon) => {
-        setPickerLocation(latLon);
-    });
-
-    $: drawMarkerAndCircle(pickerLocation, selectedPeriod);
-
     const removeCircles = () => {
         if(markers) {
             markers.forEach(marker => marker.remove());
@@ -122,6 +122,63 @@
             circles = [];
         }
     }
+ 
+    let pickerLocation : LatLon | null;
+    let detailLocation : LatLon | null;
+
+    const onPickerLocation = (latLon: LatLon) => {
+        console.log('pickerLocation', latLon);
+        pickerLocation = latLon;
+        updateUI(selectedPeriod);
+    }
+
+    store.on('pickerLocation', onPickerLocation);
+
+    const onDetailLocation = (latLon: LatLon) => {
+        console.log('detailLocation', latLon);
+        detailLocation = latLon;
+        updateUI(selectedPeriod);
+    }
+
+    store.on('detailLocation', onDetailLocation);
+
+    $: updateUI(selectedPeriod);
+    const updateUI = (selectedPeriod: number) => {
+        // print all relevant variables
+        console.log('updateUI: pickerLocation', pickerLocation);
+        console.log('updateUI: detailLocation', detailLocation);
+        console.log('updateUI: pickerActive', pickerActive);
+        console.log('updateUI: detailActive', detailActive);
+        console.log('updateUI: mode', mode);
+        
+        if(detailActive && !pickerActive  && detailLocation) {
+            mode = 'detail';
+            //const detailLocation : LatLon | null = store.get('detailLocation');
+            console.log('updateUI: detailLocation', detailLocation);
+            if(detailLocation) {
+                drawMarkerAndCircle(detailLocation, selectedPeriod);
+            }
+        } else if(!detailActive && pickerActive && pickerLocation) {
+            mode = 'picker';
+            //const pickerLocation : LatLon | null = store.get('pickerLocation');
+            console.log('updateUI: pickerLocation', pickerLocation);
+            if(pickerLocation) {
+                drawMarkerAndCircle(pickerLocation, selectedPeriod);
+            }
+        } else if (!detailActive && !pickerActive && mode !== 'none') {
+            mode = 'none';
+            const latLon : LatLon = { lat: -1, lon: -1 };
+            console.log('updateUI: none', latLon);
+            drawMarkerAndCircle(latLon, selectedPeriod);
+        }
+
+        console.log('end updateUI: pickerLocation', pickerLocation);
+        console.log('endupdateUI: detailLocation', detailLocation);
+        console.log('end updateUI: pickerActive', pickerActive);
+        console.log('end updateUI: detailActive', detailActive);
+        console.log('end updateUI: mode', mode);
+
+    }
 
     const drawMarkerAndCircle = ( latLon: LatLon, period: number) => {
         removeCircles();
@@ -131,9 +188,6 @@
         }
 
         const { lat, lon } = latLon;
-
-        //marker = new L.Marker({ lat, lng: lon },{ icon: markers.pulsatingIcon }).addTo(map);
-
         // add three hour circle
         addCircleAndMarker(lat, lon, waveDistanceHours(period, 3), 3);
 
@@ -146,6 +200,8 @@
         addCircleAndMarker(lat, lon, waveDistanceHours(period, 36), 36);
         addCircleAndMarker(lat, lon, waveDistanceHours(period, 48), 48);
     }
+
+    //$: drawMarkerAndCircle(pickerLocation, selectedPeriod);
 
     // function to add a circle with marker on the map
     // extrated from for loop
@@ -160,8 +216,6 @@
         // Add the marker to the map at the new position
         markers.push(L.marker([lat_marker, lon_marker], { icon: L.divIcon({ html: `<div>${hours}h</div>`, iconSize: [16, 16], iconAnchor: [8, 20]})}).addTo(map));
     }
-    
-
 </script>
 
 <style lang="less">
