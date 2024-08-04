@@ -22,6 +22,9 @@
     
     let markers: L.Marker[] = [];
     let buoys: L.Marker[] = [];
+    let buoys_circles: L.CircleMarker[] = [];
+    let buoys_time: L.Marker[] = [];
+
     // list of circles
     let circles: L.Circle[] = [];
 
@@ -63,13 +66,19 @@
 
     onMount(() => {
         console.log('onMount');
-        // add marker at Lengtegraad 3.80994° Breedtegraat 	55.39882° for a12 buor
-        buoys.push(L.marker([55.39882, 3.80994], { icon: L.divIcon({ html: `<div>A12</div>`, iconSize: [16, 16], iconAnchor: [8, 24]})}).addTo(map));
-        // add marker for j4
-        buoys.push(L.marker([53.82, 2.95], { icon: L.divIcon({ html: `<div>J4</div>`, iconSize: [16, 16], iconAnchor: [8, 24]})}).addTo(map));
-        // add marker for k13
-        buoys.push(L.marker([53.22, 3.22], { icon: L.divIcon({ html: `<div>K13</div>`, iconSize: [16, 16], iconAnchor: [8, 24]})}).addTo(map));
+        
+        const addBuoyMarker = (lat: number, lon: number, label: string) => {
+            buoys.push(L.marker([lat, lon], { icon: L.divIcon({ html: `<div>${label}</div>`, iconSize: [16, 16], iconAnchor: [8, 24]})}).addTo(map));
+            buoys_circles.push(new L.CircleMarker({ lat, lng: lon }, {stroke: false, radius: 26, color: '#000000', opacity: 0.25, fill: true} ).addTo(map));
+        }
 
+        // add marker at Lengtegraad 3.80994° Breedtegraat 	55.39882° for a12 buor
+        addBuoyMarker(55.39882, 3.80994, 'A12');
+        // add marker for j4
+        addBuoyMarker(53.82, 2.95, 'J4');
+        // add marker for k13
+        addBuoyMarker(53.22, 3.22, 'K13');
+        
         if(store.get('pickerLocation')) {
             pickerLocation = store.get('pickerLocation');
             pickerActive = true;
@@ -94,6 +103,12 @@
 
         buoys.forEach(buoy => buoy.remove());
         buoys = [];
+
+        buoys_circles.forEach(circle => circle.remove());
+        buoys_circles = [];
+
+        buoys_time.forEach(time => time.remove());
+        buoys_time = [];
     });
 
     // speed of ocean waves in m/s as function of period
@@ -121,6 +136,9 @@
             circles.forEach(circle => circle.remove());
             circles = [];
         }
+
+        buoys_time.forEach(time => time.remove());
+        buoys_time = [];
     }
  
     let pickerLocation : LatLon | null;
@@ -171,17 +189,11 @@
             console.log('updateUI: none', latLon);
             drawMarkerAndCircle(latLon, selectedPeriod);
         }
-
-        console.log('end updateUI: pickerLocation', pickerLocation);
-        console.log('endupdateUI: detailLocation', detailLocation);
-        console.log('end updateUI: pickerActive', pickerActive);
-        console.log('end updateUI: detailActive', detailActive);
-        console.log('end updateUI: mode', mode);
-
     }
 
     const drawMarkerAndCircle = ( latLon: LatLon, period: number) => {
         removeCircles();
+        buoys_time.forEach(time => time.remove());
 
         if(!latLon || latLon.lat === -1 || latLon.lon === -1) {
             return;
@@ -199,6 +211,24 @@
 
         addCircleAndMarker(lat, lon, waveDistanceHours(period, 36), 36);
         addCircleAndMarker(lat, lon, waveDistanceHours(period, 48), 48);
+
+        // add wave propegation time for every buoy
+        buoys_time = [];
+        buoys.forEach((buoy, index) => {
+            const distance = Math.round(buoy.getLatLng().distanceTo(L.latLng(lat, lon)));
+            // wave travel time
+            const time = Math.round(distance / waveSpeed(period));
+            // seconds to pretty print hours minutes seconds
+            const hours = Math.floor(time / 3600);
+            const minutes = Math.floor((time % 3600) / 60);
+            // get seconds and cast to int  to remove decimal part
+            const seconds = Math.floor(time % 60);
+
+            const time_str = `${hours}h ${minutes}m ${seconds}s`;
+
+            buoys_time.push(L.marker(buoy.getLatLng(), { icon: L.divIcon({ html: `<div style="text-align:center;">${time_str}</div>`, iconSize: [64, 16], iconAnchor: [32, -20]})}).addTo(map));
+        });
+
     }
 
     //$: drawMarkerAndCircle(pickerLocation, selectedPeriod);
@@ -206,7 +236,7 @@
     // function to add a circle with marker on the map
     // extrated from for loop
     const addCircleAndMarker = (lat: number, lon: number, range: number, hours: number) => {
-        circles.push(new L.Circle({ lat, lng: lon }, range, {stroke: 1, color: '#000000', opacity: 0.25, fill: false} ).addTo(map));
+        circles.push(new L.Circle({ lat, lng: lon }, range, {weight: 1, color: '#000000', opacity: 0.25, fill: false} ).addTo(map));
         const radius_degrees = range / 111320;
 
         // Calculate new latitude for the marker
@@ -214,7 +244,7 @@
         const lon_marker = lon; // same longitude
 
         // Add the marker to the map at the new position
-        markers.push(L.marker([lat_marker, lon_marker], { icon: L.divIcon({ html: `<div>${hours}h</div>`, iconSize: [16, 16], iconAnchor: [8, 20]})}).addTo(map));
+        markers.push(L.marker([lat_marker, lon_marker], { icon: L.divIcon({ html: `<div style="text-align:center;">${hours}h</div>`, iconSize: [16, 16], iconAnchor: [8, 20]})}).addTo(map));
     }
 </script>
 
